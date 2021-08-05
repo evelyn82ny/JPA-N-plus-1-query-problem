@@ -1,5 +1,6 @@
 package evelyn.ordersystem.domain;
 
+import evelyn.ordersystem.repository.MemberRepository;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,9 +23,9 @@ public class MemberRepositoryTest {
     public void testMember(){
         Member member = new Member();
         member.setName("memberA");
-        Long savedId = memberRepository.save(member);
+        memberRepository.save(member);
 
-        Member findMember = memberRepository.find(savedId);
+        Member findMember = memberRepository.findOne(1L);
 
         assertThat(findMember.getId()).isEqualTo(member.getId());
         assertThat(findMember.getName()).isEqualTo(member.getName());
