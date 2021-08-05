@@ -1,6 +1,5 @@
 package evelyn.ordersystem.domain;
 
-import org.assertj.core.api.Assertions;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,7 +9,6 @@ import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.*;
-import static org.junit.jupiter.api.Assertions.*;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest
@@ -23,13 +21,13 @@ public class MemberRepositoryTest {
     @Rollback(false)
     public void testMember(){
         Member member = new Member();
-        member.setUsername("memberA");
+        member.setName("memberA");
         Long savedId = memberRepository.save(member);
 
         Member findMember = memberRepository.find(savedId);
 
         assertThat(findMember.getId()).isEqualTo(member.getId());
-        assertThat(findMember.getUsername()).isEqualTo(member.getUsername());
+        assertThat(findMember.getName()).isEqualTo(member.getName());
         assertThat(findMember).isEqualTo(member);
     }
 }
