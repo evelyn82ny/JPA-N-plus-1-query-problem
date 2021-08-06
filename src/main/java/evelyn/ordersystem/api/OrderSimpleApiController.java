@@ -10,11 +10,11 @@ import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
-public class OrderApiController {
+public class OrderSimpleApiController {
 
     private final OrderSimpleQueryRepository orderSimpleQueryRepository;
 
-    @GetMapping("/api/orders")
+    @GetMapping("/api/simple-orders")
     public List<OrderSimpleQueryDto> orders() {
         return orderSimpleQueryRepository.findOrderDtos();
     }
