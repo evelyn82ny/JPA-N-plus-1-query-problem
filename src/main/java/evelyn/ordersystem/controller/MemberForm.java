@@ -1,4 +1,4 @@
-package evelyn.ordersystem.web;
+package evelyn.ordersystem.controller;
 
 import lombok.Getter;
 import lombok.Setter;

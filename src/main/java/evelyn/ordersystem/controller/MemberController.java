@@ -1,4 +1,4 @@
-package evelyn.ordersystem.web;
+package evelyn.ordersystem.controller;
 
 import evelyn.ordersystem.domain.Address;
 import evelyn.ordersystem.domain.Member;
