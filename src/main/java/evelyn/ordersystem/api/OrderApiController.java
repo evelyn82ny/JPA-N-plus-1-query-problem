@@ -5,7 +5,6 @@ import evelyn.ordersystem.domain.Order;
 import evelyn.ordersystem.domain.OrderItem;
 import evelyn.ordersystem.domain.OrderStatus;
 import evelyn.ordersystem.repository.OrderRepository;
-import evelyn.ordersystem.repository.order.query.OrderFlatDto;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,7 +22,12 @@ public class OrderApiController {
 
     @GetMapping("/api/orders")
     public List<OrderDto> order() {
-        List<Order> orders = orderRepository.findAll();
+        List<Order> orders = orderRepository.findAllWithItem();
+
+        for(Order odr : orders){
+            System.out.println("order ref = " + odr + " ,id = " + odr.getMember().getId());
+        }
+
         List<OrderDto> result = orders.stream()
                 .map(o -> new OrderDto(o))
                 .collect(Collectors.toList());
