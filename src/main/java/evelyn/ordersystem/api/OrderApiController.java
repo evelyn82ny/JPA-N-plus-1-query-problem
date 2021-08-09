@@ -8,6 +8,7 @@ import evelyn.ordersystem.repository.OrderRepository;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
@@ -21,12 +22,9 @@ public class OrderApiController {
     private final OrderRepository orderRepository;
 
     @GetMapping("/api/orders")
-    public List<OrderDto> order() {
-        List<Order> orders = orderRepository.findAllWithItem();
-
-        for(Order odr : orders){
-            System.out.println("order ref = " + odr + " ,id = " + odr.getMember().getId());
-        }
+    public List<OrderDto> order(@RequestParam(value = "offset", defaultValue = "0") int offset,
+                                @RequestParam(value = "limit", defaultValue = "100") int limit) {
+        List<Order> orders = orderRepository.findAllWithMemberDelivery(offset, limit);
 
         List<OrderDto> result = orders.stream()
                 .map(o -> new OrderDto(o))
