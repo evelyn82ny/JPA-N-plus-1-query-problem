@@ -4,11 +4,11 @@ import evelyn.ordersystem.domain.Address;
 import evelyn.ordersystem.domain.Order;
 import evelyn.ordersystem.domain.OrderItem;
 import evelyn.ordersystem.domain.OrderStatus;
-import evelyn.ordersystem.repository.OrderRepository;
+import evelyn.ordersystem.repository.order.query.OrderQueryDto;
+import evelyn.ordersystem.repository.order.query.OrderQueryRepository;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
@@ -19,18 +19,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class OrderApiController {
 
-    private final OrderRepository orderRepository;
+    private final OrderQueryRepository orderQueryRepository;
 
     @GetMapping("/api/orders")
-    public List<OrderDto> order(@RequestParam(value = "offset", defaultValue = "0") int offset,
-                                @RequestParam(value = "limit", defaultValue = "100") int limit) {
-        List<Order> orders = orderRepository.findAllWithMemberDelivery(offset, limit);
-
-        List<OrderDto> result = orders.stream()
-                .map(o -> new OrderDto(o))
-                .collect(Collectors.toList());
-
-        return result;
+    public List<OrderQueryDto> order() {
+        return orderQueryRepository.findOrderQueryDtos();
     }
 
     @Data
