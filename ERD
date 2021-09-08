@@ -1,0 +1,39 @@
+// > many-to-one; < one-to-many; - one-to-one
+
+Table member {
+  id Long [pk, increment] 
+  name String
+  address String
+}
+
+Table orders {
+  id Long [pk] 
+  member_id Long [ref: > member.id, not null]
+  orderDate date
+}
+
+Table order_item { 
+  id Long [pk]
+  order_id Long [ref: > orders.id] 
+  items_id item [ref: > item.id]
+  quantity int [default: 1]
+}
+
+Table item {
+  id Long [PK]
+  name String
+  price int
+  stockQuantity Integer
+}
+
+Enum delivery_status {
+  READY
+  COMP
+}
+
+Table Delivery {
+  id Long [PK]
+  order_id Long [ref: - orders.id]
+  status delivery_status
+}
+
