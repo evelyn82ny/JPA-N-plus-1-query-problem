@@ -2,7 +2,7 @@
 
 ![png](/_image/order_system_erd.png)
 
-- [Order 와 Member 관계 : @ManyToOne](#@ManyToOne)
+- [Order 와 Member 관계 : @ManyToOne](#ManyToOne)
 - [양방향 관계 @JsonIgnore 설정](#Bidirectional relationship)
 - [지연 로딩에 대한 Type definition error 발생](#Lazy loading(Type definition error))
 
