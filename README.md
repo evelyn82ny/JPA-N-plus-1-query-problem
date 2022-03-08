@@ -6,7 +6,7 @@
 - [양방향 관계 @JsonIgnore 설정](#Bidirectional relationship)
 - [지연 로딩에 대한 Type definition error 발생](#Lazy loading(Type definition error))
 
-## @ManyToOne
+## ManyToOne
 
 - member 관련 커밋 [daa3890](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/daa3890a4446bb0aab792751319b6e67eeb107dd)
 - order 관련 커밋 [ea0afef](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/ea0afefe6c921bea497faaa50fee8e608b0cede2)
