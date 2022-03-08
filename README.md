@@ -3,8 +3,8 @@
 ![png](/_image/order_system_erd.png)
 
 - [Order 와 Member 관계 : @ManyToOne](#ManyToOne)
-- [양방향 관계 @JsonIgnore 설정](#Bidirectional relationship)
-- [지연 로딩에 대한 Type definition error 발생](#Lazy loading(Type definition error))
+- [양방향 관계 @JsonIgnore 설정](#Bidirectional-relationship)
+- [지연 로딩에 대한 Type definition error 발생](#Type-definition-error)
 
 ## ManyToOne
 
@@ -137,7 +137,7 @@ public class Member {
 Order 와 Member 관계에서 주인이 아닌 Member Entity 에 ```@JsonIgnore``` 를 추가하면 조회 시 해당 필드는 ignore 되어 무한루프를 막는다.
 <br>
 
-## Lazy loading(Type definition error)
+## Type definition error
 
 양방향 관계로 인해 발생되는 무한루프를 해결했지만 지연 로딩에 대한 에러가 발생한다.
 
