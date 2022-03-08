@@ -5,6 +5,7 @@
 - [Order 와 Member 관계 : @ManyToOne](#ManyToOne)
 - [양방향 관계 @JsonIgnore 설정](#Bidirectional-relationship)
 - [지연 로딩에 대한 Type definition error 발생](#Type-definition-error)
+- [JPA N + 1 쿼리 문제](#JPA-N-plus-1)
 
 ## ManyToOne
 
@@ -248,3 +249,160 @@ static class SimpleOrderDto{
     private Address address;
 }
 ```
+<br>
+
+## JPA N plus 1
+
+![](/_image/init_orders_table.png)
+
+현재 다음과 같이 2개의 주문이 있다. 각 주문의 MEMBER_ID를 보면 1과 8로 서로 다른 멤버가 주문한 것을 알 수 있다.
+
+모든 주문 데이터를 가져오기 위해 ```http://localhost:8080/api/orders``` 를 요청 시 발생되는 쿼리는 다음과 같다.
+
+```text
+// 1. orderRepository에서 모든 주문 orders를 가져오기 위한 쿼리 발생
+
+ select
+        order0_.order_id as order_id1_6_,
+        order0_.delivery_id as delivery4_6_,
+        order0_.member_id as member_i5_6_,
+        order0_.order_date as order_da2_6_,
+        order0_.status as status3_6_ 
+    from
+        orders order0_
+------------------------------------------------
+// 2. order_id 4 를 주문한 member_id 가 1 인 멤버의
+        getName()을 수행하기 위한 쿼리 발생
+        
+ select
+        member0_.member_id as member_i1_4_0_,
+        member0_.city as city2_4_0_,
+        member0_.street as street3_4_0_,
+        member0_.zipcode as zipcode4_4_0_,
+        member0_.name as name5_4_0_ 
+    from
+        member member0_ 
+    where
+        member0_.member_id=?
+        orders order0_
+------------------------------------------------
+// 3. order_id 4 주문의 getAddress()를 수행하기 위한 쿼리 발생
+
+ select
+        delivery0_.delivery_id as delivery1_2_0_,
+        delivery0_.city as city2_2_0_,
+        delivery0_.street as street3_2_0_,
+        delivery0_.zipcode as zipcode4_2_0_,
+        delivery0_.status as status5_2_0_ 
+    from
+        delivery delivery0_ 
+    where
+        delivery0_.delivery_id=?
+        orders order0_
+------------------------------------------------
+// 4. order_id 11 를 주문한 member_id 가 8 인 멤버의
+        getName()을 수행하기 위한 쿼리 발생
+        
+ select
+        member0_.member_id as member_i1_4_0_,
+        member0_.city as city2_4_0_,
+        member0_.street as street3_4_0_,
+        member0_.zipcode as zipcode4_4_0_,
+        member0_.name as name5_4_0_ 
+    from
+        member member0_ 
+    where
+        member0_.member_id=?
+        orders order0_
+------------------------------------------------
+// 5. order_id 11 주문의 getAddress()을 수행하기 위한 쿼리 발생
+
+ select
+        delivery0_.delivery_id as delivery1_2_0_,
+        delivery0_.city as city2_2_0_,
+        delivery0_.street as street3_2_0_,
+        delivery0_.zipcode as zipcode4_2_0_,
+        delivery0_.status as status5_2_0_ 
+    from
+        delivery delivery0_ 
+    where
+        delivery0_.delivery_id=?
+```
+
+총 5개의 쿼리가 발생한다.
+
+1. OrderRepository 에서 **모든 주문 orders** 를 가져오기 위한 쿼리 발생
+2. order_id 4 를 주문한 ```member_id 1 인 멤버``` 의 getName()을 수행하기 위한 쿼리 발생
+3. order_id 4 주문의 getAddress() 을 수행하기 위한 쿼리 발생
+4. order_id 11 주문한 ```member_id 8 인 멤버``` 의 getName()을 수행하기 위한 쿼리 발생
+5. order_id 11 주문의 getAddress() 을 수행하기 위한 쿼리 발생
+
+5개의 쿼리를 정확하게 보면 ```모든 주문을 위한 1개``` + ```order Id 가 4 인 주문에서 발생하는 2개의 쿼리``` + ```order Id 가 11 인 주문에서 발생하는 2개의 쿼리``` 로 나눌 수 있다. 물론 이 경우는 모든 쿼리가 발생하는 최악의 경우를 말한다.
+
+이렇게 모든 경우에 쿼리가 발생하는 최악의 경우를 **N + 1 문제**라고 한다.
+
+영속성 컨텍스트는 1차 캐시에 이미 존재하는 객체를 또 다시 조회할 경우 쿼리가 발생되지 않는다는 점을 이용해 최악의 경우가 아닌 상황에서 쿼리 발생이 적어지는지 확인해 보았다. 실제로 적용되는지 보기 위해 아래와 같이 주문 테이블에서 MEMBER_ID 를 같은 멤버로 수정한 뒤 실행했다.
+
+![png](/_image/order_table_modify_member_id.png)
+
+```text
+// 1. orderRepository에서 모든 주문 orders를 가져오기 위한 쿼리 발생
+
+ select
+        delivery0_.delivery_id as delivery1_2_0_,
+        delivery0_.city as city2_2_0_,
+        delivery0_.street as street3_2_0_,
+        delivery0_.zipcode as zipcode4_2_0_,
+        delivery0_.status as status5_2_0_ 
+    from
+        delivery delivery0_ 
+    where
+        delivery0_.delivery_id=?
+------------------------------------------------
+// 2. order_id 4 주문자인 member_id 가 1 인 멤버의
+        getName()을 수행하기 위한 쿼리 발생
+        
+ select
+        delivery0_.delivery_id as delivery1_2_0_,
+        delivery0_.city as city2_2_0_,
+        delivery0_.street as street3_2_0_,
+        delivery0_.zipcode as zipcode4_2_0_,
+        delivery0_.status as status5_2_0_ 
+    from
+        delivery delivery0_ 
+    where
+        delivery0_.delivery_id=?
+------------------------------------------------
+// 3. order_id 4 주문의 getAddress()을 수행하기 위한 쿼리 발생
+
+ select
+        delivery0_.delivery_id as delivery1_2_0_,
+        delivery0_.city as city2_2_0_,
+        delivery0_.street as street3_2_0_,
+        delivery0_.zipcode as zipcode4_2_0_,
+        delivery0_.status as status5_2_0_ 
+    from
+        delivery delivery0_ 
+    where
+        delivery0_.delivery_id=?
+------------------------------------------------
+// 4. order_id 11 주문의 getAddress()을 수행하기 위한 쿼리 발생
+
+ select
+        delivery0_.delivery_id as delivery1_2_0_,
+        delivery0_.city as city2_2_0_,
+        delivery0_.street as street3_2_0_,
+        delivery0_.zipcode as zipcode4_2_0_,
+        delivery0_.status as status5_2_0_ 
+    from
+        delivery delivery0_ 
+    where
+        delivery0_.delivery_id=?
+```
+
+예상했던 것과 같이 ```모든 주문을 위한 1개``` + ```order Id 가 4인 주문에서 발생하는 2개의 쿼리``` + ```order Id 가 11 인 주문에서 발생하는 1개의 쿼리```로 총 4개의 쿼리가 발생한다. order Id 가 11 인 주문의 getName() 호출에서 쿼리가 발생하지 않은 이유는 MEMBER_ID가 1인 객체가 이미 1차 캐시 때문이다.
+
+order Id 가 4 인 주문에서 getName() 호출하며 MEMBER_ID 가 1인 엔티티가 1차 캐시에 저장되었고, order Id 가 11 인 주문에서 getName()을 호출했을 때 이미 1차 캐시에 MEMBER_ID 1 인 엔티티가 존재하기 때문에 쿼리가 발생하지 않는다.
+
+이런식으로 쿼리를 줄일 수 있지만 최악의 경우 대비해야 되기 때문에 최악의 경우에 중점을 두고 작성해야하며, 1차 캐시를 이용해 쿼리를 줄인다는 것은 그닥 많은 효과가 있을 것 같지 않다.
+<br>
