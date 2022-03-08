@@ -3,9 +3,14 @@
 ![png](/_image/order_system_erd.png)
 
 - [Order 와 Member 관계 : @ManyToOne](#ManyToOne)
-- [양방향 관계 @JsonIgnore 설정](#Bidirectional-relationship)
+- [양방향 관계 @JsonIgnore 설정](#bidirectional-relationship----)
 - [지연 로딩에 대한 Type definition error 발생](#Type-definition-error)
 - [JPA N + 1 쿼리 문제](#JPA-N-plus-1)
+- [컬렉션 조회](#collection-)
+- [fetch join](#fetch-join-)
+- [paging 불가능](#paging)
+- [batch fetch size 설정](#hibernatedefault_batch_fetch_size-)
+- [where in 절로 N + 1 쿼리 해결](#where-in--n--1--)
 
 ## ManyToOne
 
@@ -74,7 +79,7 @@ Spring Data JPA 를 사용하지 않으면 **EntityManager를 직접 작성해�
 - ```@PersistenceUnit``` : EntityManagerFactory 주입
 <br>
 
-## Bidirectional relationship
+## Bidirectional relationship 에서 발생되는 무한 루트
 
 - 해당 커밋 [c0a7d87](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/c0a7d87e6a99b9b2023d908fd14850230d3e683f)
 
@@ -253,7 +258,7 @@ static class SimpleOrderDto{
 
 ## JPA N plus 1
 
-![](/_image/init_orders_table.png)
+![png](/_image/init_orders_table.png)
 
 현재 다음과 같이 2개의 주문이 있다. 각 주문의 MEMBER_ID를 보면 1과 8로 서로 다른 멤버가 주문한 것을 알 수 있다.
 
@@ -406,3 +411,607 @@ order Id 가 4 인 주문에서 getName() 호출하며 MEMBER_ID 가 1인 엔티
 
 이런식으로 쿼리를 줄일 수 있지만 최악의 경우 대비해야 되기 때문에 최악의 경우에 중점을 두고 작성해야하며, 1차 캐시를 이용해 쿼리를 줄인다는 것은 그닥 많은 효과가 있을 것 같지 않다.
 <br>
+
+## Collection 조회
+
+```@OneToMany``` 관계를 조회하는 것을 컬렉션 조회라고 한다. 1개의 주문에 여러 주문 상품이 있는 경우가 일대다 관계인데 fetch join 할 경우 엄청나게 많은 데이터를 읽어온다.<br>
+
+- 해당 커밋 [b55c69a](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/b55c69a1f19f8ecd693d653587dd69d954ef56b5)
+
+```java
+
+@GetMapping("/api/orders")
+public List<Order> order(){     
+	List<Order> orders = orderRepository.findAll();
+    for(Order order : orders){
+    	order.getMember().getName();
+        order.getDelivery().getAddress();
+        
+        List<OrderItem> orderItems = order.getOrderItems();
+        orderItems.stream().forEach(o -> o.getItem().getName());
+    }
+	return orders;
+}
+```
+![png](/_image/collection_lookup.png)
+
+지연 로딩으로 설정한 orderItem 을 강제 초기화하면 주문한 아이템의 상세까지 다 출력되는 것을 알 수 있다.
+
+모든 주문 orders 를 가져오는 1개 쿼리가 발생하고, **1 개의 주문에서 3 개 쿼리가 발생**한다.<br>
+
+- member 의 이름을 조회하는 쿼리: getName()
+- 배달 주소를 조회하는 쿼리: getAddress()
+- 주문한 아이템을 모두 가져오는 쿼리: .getItem().getName()
+
+1 개의 주문에서 3 개의 쿼리가 발생하고, 주문한 아이템에 대한 각각의 데이터를 가져오기 위해 **주문한 아이템 수 n 개의 쿼리가 추가로 발생**한다. 이렇게 OneToMany 관계에서는 엄청나게 많은 쿼리가 발생한다.
+<br>
+
+일단 entity 자체를 반환하는 것을 막고 원하는 데이터만 출력하도록 DTO를 적용한다.
+
+- 해당 커밋 [f74cbc8](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/f74cbc8e437257d8224fc10cd681ee11d368a7c4)
+
+```java
+@GetMapping("/api/orders")
+public List<OrderDto> order() {
+	List<Order> orders = orderRepository.findAll();
+    List<OrderDto> result = orders.stream()
+                        .map(o -> new OrderDto(o))
+                        .collect(Collectors.toList());
+    return result;
+}
+```
+
+![png](/_image/collection_lookup_apply_dto.png)
+
+DTO를 적용으로 원하는 데이터만 출력되었으며 발생되는 쿼리는 위와 동일하게 많다.
+<br>
+
+## DTO 로 반환하는 API
+
+- 해당 커밋 [ddbb74e](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/ddbb74ecf779a474f31d054759439a22f662973a)
+
+불필요한 데이터까지 가져오는 것보다 원하는 데이터만 가져오는 최적화를 시도한다.
+
+```java
+@Data
+public class OrderSimpleQueryDto { 
+    private Long orderId;
+    private String name;
+    private LocalDateTime orderDate;
+    private OrderStatus orderStatus;
+    private Address address;
+    // 생성자
+}
+```
+5 개의 필드만 가져오는 DTO 를 생성했다.
+
+```java
+public List<OrderSimpleQueryDto> findOrderDtos() {
+    return em.createQuery(
+            "select new evelyn.ordersystem.repository.order.simplequery
+            .OrderSimpleQueryDto(o.id, m.name, o.orderDate, o.status, d.address)" +
+            " from Order o" +
+            " join o.member m" +
+            " join o.delivery d", OrderSimpleQueryDto.class)
+            .getResultList();
+}
+```
+모든 연관 관계를 join 하되 JPQL 결과를 **DTO 로 즉시 변환**한다. SELECT 절에서 원하는 데이터를 직접 선택하기 때문에 애플리케이션 네트워크 용량을 최적화 할 수 있다.
+
+```text
+    select
+        order0_.order_id as col_0_0_,
+        member1_.name as col_1_0_,
+        order0_.order_date as col_2_0_,
+        order0_.status as col_3_0_,
+        delivery2_.city as col_4_0_,
+        delivery2_.street as col_4_1_,
+        delivery2_.zipcode as col_4_2_ 
+    from
+        orders order0_ 
+
+    inner join
+        member member1_ 
+            on order0_.member_id=member1_.member_id 
+    
+    inner join
+        delivery delivery2_ 
+            on order0_.delivery_id=delivery2_.delivery_id
+```
+
+원하는 데이터만 가지고 오는 JPQL 를 작성하면 모든 데이터를 가지고 오는 경우보다 필요한 데이터만 가지고 오니 상대적으로 최적화할 수 있다.
+
+### 문제점
+
+하지만 여기서 **활용성**이라는 또 다른 문제가 발생한다. 모든 데이터를 가지고 오는 경우 상황에 맞는 DTO 에 적용하면 되므로 활용성이 높다. 하지만 원하는 데이터만 가져오도록 JPQL을 작성하면 활용성이 떨어진다.
+
+repository 의 재사용성을 높이기 위해 DTO 로 변환하지 말고, 순수한 엔티티를 조회하는 용도로 사용하는 게 좋을 것이라 생각한다.
+
+뿐만 아니라 성능은 조회가 아닌 **JOIN 할 때 결정**되는데 두 방식은 같은 JOIN 방식이므로 성능 차이가 크게 나지 않는다.
+<br>
+
+## Fetch join 적용
+
+- 해당 커밋 [75be719](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/75be71982518f1903a9d865ad3985ca10cccba46)
+
+모든 연관관계를 join 하고 DTO로 즉시 반환하는 것은 활용성이 떨어지기 때문에 일단 fetch join 만 적용한다.
+
+```java
+public List<Order> findAllWithItem() {
+    return em.createQuery(
+            "select o from Order o" +
+                    " join fetch o.member m" +
+                    " join fetch o.delivery d" +
+                    " join fetch o.orderItems oi" +
+                    " join fetch oi.item i", Order.class)
+            .getResultList();
+}
+```
+
+![png](/_image/fetch_join_table_result.png)
+
+예상대로 쿼리는 1 번이 발생하지만 실제 DB 에서 결과를 보면 동일한 order_id, member_id 가 2번씩 출력된다.
+
+fetch join 한 결과 2개의 주문이지만 4개의 결과로 출력되는 이유는 order 가 기준이 아니고 **order_item 을 기준으로 처리**되었기 때문이다.
+
+collection fetch join 한 결과 발생하는 1개의 쿼리는 다음과 같다.
+```text
+     select
+         distinct order0_.order_id as order_id1_6_0_,
+         member1_.member_id as member_i1_4_1_,
+         delivery2_.delivery_id as delivery1_2_2_,
+         orderitems3_.order_item_id as order_it1_5_3_,
+         item4_.item_id as item_id2_3_4_,
+         order0_.delivery_id as delivery4_6_0_,
+         order0_.member_id as member_i5_6_0_,
+         order0_.order_date as order_da2_6_0_,
+         order0_.status as status3_6_0_,
+         member1_.city as city2_4_1_,
+         member1_.street as street3_4_1_,
+         member1_.zipcode as zipcode4_4_1_,
+         member1_.name as name5_4_1_,
+         delivery2_.city as city2_2_2_,
+         delivery2_.street as street3_2_2_,
+         delivery2_.zipcode as zipcode4_2_2_,
+         delivery2_.status as status5_2_2_,
+         orderitems3_.count as count2_5_3_,
+         orderitems3_.item_id as item_id4_5_3_,
+         orderitems3_.order_id as order_id5_5_3_,
+         orderitems3_.order_price as order_pr3_5_3_,
+         orderitems3_.order_id as order_id5_5_0__,
+         orderitems3_.order_item_id as order_it1_5_0__,
+         item4_.name as name3_3_4_,
+         item4_.price as price4_3_4_,
+         item4_.stock_quantity as stock_qu5_3_4_,
+         item4_.artist as artist6_3_4_,
+         item4_.etc as etc7_3_4_,
+         item4_.author as author8_3_4_,
+         item4_.isbn as isbn9_3_4_,
+         item4_.actor as actor10_3_4_,
+         item4_.director as directo11_3_4_,
+         item4_.dtype as dtype1_3_4_ 
+     from
+         orders order0_ 
+     inner join
+         member member1_ 
+             on order0_.member_id=member1_.member_id 
+     inner join
+         delivery delivery2_ 
+             on order0_.delivery_id=delivery2_.delivery_id 
+     inner join
+         order_item orderitems3_ 
+             on order0_.order_id=orderitems3_.order_id 
+     inner join
+         item item4_ 
+             on orderitems3_.item_id=item4_.item_id
+```
+
+collection fetch join 한 경우 1개의 쿼리가 발생하지만 **일대다 조인으로 인해 데이터가 엄청나게 증가하는 문제** 를 갖고 있다.
+
+fetch join 한 order의 reference 와 주문한 Member 의 Id 를 출력해봤다.
+
+- 해당 커밋 [d77520f](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/d77520f93aa0db2b07a288fc51f5c6998c8bf278)
+
+![png](/_image/fetch_join_result.png)
+
+fetch join 한 order의 reference 를 출력하면 같은 주문이므로 같은 reference가 출력된다.
+
+중복을 제거하기 위해 JPQL 의 distinct를 적용해 중복 처리를 시도했다.
+<br>
+
+### JPA distinct
+
+JPQL 의 distinct 는 SQL 에 distinct 를 추가하고 애플리케이션에서 한번 더 중복을 제거한다.<br>
+
+```java
+public List<Order> findAllWithItem() {
+    return em.createQuery(
+            "select distinct o from Order o" +
+                    " join fetch o.member m" +
+                    " join fetch o.delivery d" +
+                    " join fetch o.orderItems oi" + 
+                    " join fetch oi.item i", Order.class)
+            .getResultList();
+}
+```
+
+![png](/_image/distinct_apply_only_jpa.png)
+
+distinct를 추가하면 JPA 에서는 id 가 같은 경우 중복을 제거하기 때문에 2개의 주문이 출력된다.
+
+![png](/_image/distinct_not_apply_db.png)
+
+하지만 실제 DB 에서 조회하면 중복이 제거되지 않는다. 실제 DB 에서 중복을 제거하려면 모든 필드의 값이 같아야 하는데 그렇지 않기 때문에 중복처리가 되지 않는다.
+
+collection fetch join 은 많은 데이터가 처리되므로 2개 이상 join 시 데이터가 부정합하게 조회될 수 있어 1개만 사용하는게 좋다.
+<br>
+
+## paging
+
+collection fetch join 사용 시 **paging 이 불가능**한 문제점도 발생한다.
+
+order 에 대해 fetch join 한 결과를 두번째 데이터부터 보기 위해 아래와 같은 paging을 설정한다.
+
+```java
+public List<Order> findAllWithItem() {
+	return em.createQuery(
+            "select distinct o from Order o" +
+            " join fetch o.member m" +
+            " join fetch o.delivery d" +
+            " join fetch o.orderItems oi" +
+            " join fetch oi.item i", Order.class)
+         .setFirstResult(1)  // 0 시작
+         .setMaxResults(100)
+         .getResultList();
+}
+```
+
+![png](/_image/collection_fetch_join_result.png)
+
+Order 와 OrderItem 에서 many 인 orderItem 까지 fetch join 한 뒤 두번째 데이터부터 출력되도록 paging 하면 postman 에 제대로 출력되었고 다음과 같이 1개의 쿼리가 발생했다.
+
+ ```text
+ 	select
+         distinct order0_.order_id as order_id1_6_0_,
+         member1_.member_id as member_i1_4_1_,
+         delivery2_.delivery_id as delivery1_2_2_,
+         orderitems3_.order_item_id as order_it1_5_3_,
+         item4_.item_id as item_id2_3_4_,
+         order0_.delivery_id as delivery4_6_0_,
+         order0_.member_id as member_i5_6_0_,
+         order0_.order_date as order_da2_6_0_,
+         order0_.status as status3_6_0_,
+         member1_.city as city2_4_1_,
+         member1_.street as street3_4_1_,
+         member1_.zipcode as zipcode4_4_1_,
+         member1_.name as name5_4_1_,
+         delivery2_.city as city2_2_2_,
+         delivery2_.street as street3_2_2_,
+         delivery2_.zipcode as zipcode4_2_2_,
+         delivery2_.status as status5_2_2_,
+         orderitems3_.count as count2_5_3_,
+         orderitems3_.item_id as item_id4_5_3_,
+         orderitems3_.order_id as order_id5_5_3_,
+         orderitems3_.order_price as order_pr3_5_3_,
+         orderitems3_.order_id as order_id5_5_0__,
+         orderitems3_.order_item_id as order_it1_5_0__,
+         item4_.name as name3_3_4_,
+         item4_.price as price4_3_4_,
+         item4_.stock_quantity as stock_qu5_3_4_,
+         item4_.artist as artist6_3_4_,
+         item4_.etc as etc7_3_4_,
+         item4_.author as author8_3_4_,
+         item4_.isbn as isbn9_3_4_,
+         item4_.actor as actor10_3_4_,
+         item4_.director as directo11_3_4_,
+         item4_.dtype as dtype1_3_4_ 
+     from
+         orders order0_ 
+     inner join
+         member member1_ 
+             on order0_.member_id=member1_.member_id 
+     inner join
+         delivery delivery2_ 
+             on order0_.delivery_id=delivery2_.delivery_id 
+     inner join
+         order_item orderitems3_ 
+             on order0_.order_id=orderitems3_.order_id 
+     inner join
+         item item4_ 
+             on orderitems3_.item_id=item4_.item_id 
+ ```
+
+Order 와 OrderItem 에서 many 인 orderItem 까지 fetch join 했기 때문에 1개의 쿼리가 발생했다. 하지만 쿼리를 잘 보면 paging 에 대한 **offset** 이나 **limit** 에 대한 정보가 추가되지 않았다.<br>
+
+![png](/_image/collection_fetch_join_db_result.png)
+
+실제 DB를 보면 paging 처리가 전혀되지 않았다. 또한 postman 에는 원하는 데이터가 제대로 출력되었지만 아래의 경고 로그를 남긴다.
+
+```text
+WARN 1916 --- [nio-8080-exec-1] o.h.h.internal
+.ast.QueryTranslatorImpl    
+HHH000104: firstResult/maxResults specified with collection fetch; 
+applying in memory!
+ ```
+fetch 한 모든 데이터를 읽어와 메모리에서 페이징하니 위험하다는 경고이다. 결론은 collection fetch join 사용 시 paging 이 불가능하다.<br>
+
+## hibernate.default_batch_fetch_size 설정
+
+- 해당 커밋 [546edc6](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/546edc62664ba4adbbfb30f7e47230d9a22b340b)
+
+collection fetch join 사용으로 발생되는 ```N + 1 문제``` 와 ```paging 불가능``` 이라는 2가지 문제를 해결하기 위해 **fetch size** 를 설정한다.
+
+xToOne(OneToOne, ManyToOne) 관계는 fetch join 해도 row 수가 증가하지 않으므로 데이터 전송이 급격하게 증가하지 않고 페이징 쿼리에도 영향을 주지 않는다.
+
+반대로 ToMany 를 fetch join하면 데이터 전송이 엄청나게 증가할 뿐만 아니라 paging 도 제대로 처리되지 않는다.
+
+이러한 문제를 해결하기 위해 ToMany 인 collection 은 지연 로딩으로 조회하고 지연 로딩 성능 최적화를 위해 ```hibernate.default_batch_fetch_size``` 나 ```@BatchSize``` 를 적용한다.
+
+- default_batch_fetch_size : 글로벌 설정 (모든 부분에서 동일하게 처리)
+- @BatchSize : 필드 개별 최적화
+
+
+ ```java
+ public List<OrderDto> order(@RequestParam(value = "offset", defaultValue = "0") int offset,
+                             @RequestParam(value = "limit", defaultValue = "100") int limit) {
+                             // offset : 몇번째부터 읽을 것인지, limit : 한번에 읽어올 개수
+     List<Order> orders = orderRepository.findAllWithMemberDelivery(offset, limit);
+     List<OrderDto> result = orders.stream()
+              .map(o -> new OrderDto(o))
+              .collect(Collectors.toList());
+     return result;
+ }
+ ```
+
+ ```java
+ public List<Order> findAllWithMemberDelivery(int offset, int limit) {
+     return em.createQuery("select o from Order o" +
+                         " join fetch o.member m" +
+                         " join fetch o.delivery d", Order.class)
+             .setFirstResult(offset)
+             .setMaxResults(limit)
+             .getResultList();
+   }
+ ```
+
+위와 같이 작성한 후 application.yml 에 ```default_batch_fetch_size: 100``` 으로 설정하면 총 3개의 쿼리가 발생한다.
+
+1. 모든 주문 orders 를 가져오는 쿼리
+2. Order 에서 OneToMany 관계인 ```OrderItem(many)``` 에 대한 쿼리 발생
+3. OrderItem 에서 ManyToOne 관계인 ```Item(one)``` 에 대한 쿼리 발생
+
+
+### 1. 모든 주문 orders를 가져오는 쿼리
+
+```text
+  select
+        order0_.order_id as order_id1_6_0_,
+        member1_.member_id as member_i1_4_1_,
+        delivery2_.delivery_id as delivery1_2_2_,
+        order0_.delivery_id as delivery4_6_0_,
+        order0_.member_id as member_i5_6_0_,
+        order0_.order_date as order_da2_6_0_,
+        order0_.status as status3_6_0_,
+        member1_.city as city2_4_1_,
+        member1_.street as street3_4_1_,
+        member1_.zipcode as zipcode4_4_1_,
+        member1_.name as name5_4_1_,
+        delivery2_.city as city2_2_2_,
+        delivery2_.street as street3_2_2_,
+        delivery2_.zipcode as zipcode4_2_2_,
+        delivery2_.status as status5_2_2_ 
+  from
+        orders order0_ 
+  inner join
+        member member1_ 
+            on order0_.member_id=member1_.member_id 
+  inner join
+        delivery delivery2_ 
+           on order0_.delivery_id=delivery2_.delivery_id limit ?
+```
+
+Order 와 ManyToOne 관계인 ```Member```, OneToOne 관계인 ```Delivery``` 를 fetch join 으로 읽어오는 1개의 쿼리가 발생한다.
+
+쿼리 맨 밑을 보면 controller 에 설정한 **limit** 가 제대로 추가된 것을 볼 수 있다. (offset은 0으로 설정했기 때문에 생략된다.)
+
+
+### 2. Order 에서 OneToMany 관계인 OrderItem(many)에 대한 쿼리 발생
+
+```text
+  select
+        orderitems0_.order_id as order_id5_5_1_,
+        orderitems0_.order_item_id as order_it1_5_1_,
+        orderitems0_.order_item_id as order_it1_5_0_,
+        orderitems0_.count as count2_5_0_,
+        orderitems0_.item_id as item_id4_5_0_,
+        orderitems0_.order_id as order_id5_5_0_,
+        orderitems0_.order_price as order_pr3_5_0_ 
+  from
+        order_item orderitems0_ 
+  where
+        orderitems0_.order_id in ( ?, ? )
+ ----------------------------------------------------------------------        
+  -> from order_item orderitems0_ where orderitems0_.order_id in (4, 11);
+```
+맨 마지막 줄을 보면 order_id 가 4, 11 인 OrderItem 을 불러오는 쿼리가 발생한다. 즉, Orders에 관련된 OrderItem 모두 읽어온다.<br>
+
+
+### 3. OrderItem 에서 ManyToOne 관계인 Item(one) 에 대한 쿼리 발생
+
+```text
+  select
+        item0_.item_id as item_id2_3_0_,
+        item0_.name as name3_3_0_,
+        item0_.price as price4_3_0_,
+        item0_.stock_quantity as stock_qu5_3_0_,
+        item0_.artist as artist6_3_0_,
+        item0_.etc as etc7_3_0_,
+        item0_.author as author8_3_0_,
+        item0_.isbn as isbn9_3_0_,
+        item0_.actor as actor10_3_0_,
+        item0_.director as directo11_3_0_,
+        item0_.dtype as dtype1_3_0_ 
+  from
+        item item0_ 
+  where
+        item0_.item_id in ( ?, ?, ?, ?)
+ --------------------------------------------------------------- 
+  -> from item item0_ where item0_.item_id in (2, 3, 9, 10);
+```
+
+OrderItem 와 관련된 모든 Item 을 읽어오는 쿼리가 발생한다. 이전에는 하나하나 접근했다면 batch size 을 설정했기 때문에 위와 같이 한번에 불러와 쿼리 호출 수를 줄일 수 있다.
+<br>
+
+### batch size 설정 시 장점
+
+ToMany 관계에 batch size 설정 시 장점을 정리하면 다음과 같다.
+
+- 연관관계로 관련된 모든 데이터를 한번에 불러오기 때문에 쿼리 호출 수가 ```N + 1```에서 ```1 + 1```로 최적화 된다.
+- collection fetch join 하는 경우보다 쿼리 호출이 증가하지만 DB 데이터 전송량이 감소한다.
+- 또한, collection fetch join 은 paging 이 불가능하지만 offset, limit 설정으로 페이징이 가능하다.
+
+결론은 ToOne 관계는 fetch join 해도 paging 에 영향을 주지 않으니 fetch join 으로 쿼리 호출 수를 줄이고, ToMany 관계는 batch size 설정으로 최적화한다.
+<br>
+
+## where in 로 N + 1 쿼리 해결
+
+- 해당 커밋 [4aedce8](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/4aedce8cbffc72a98584b03014ec44e2b7740d0f)
+
+```java
+public List<OrderQueryDto> findOrderQueryDtos() {
+    List<OrderQueryDto> result = findOrders();
+
+    result.forEach(o -> {
+        List<OrderItemQueryDto> orderItems = findOrderItems(o.getOrderId());
+        o.setOrderItems(orderItems);
+    });
+    return result;
+}
+```
+
+```java
+private List<OrderItemQueryDto> findOrderItems(Long orderId) {
+	return em.createQuery(
+    		"select new evelyn.ordersystem.repository.order.query
+            .OrderItemQueryDto(oi.order.id, i.name, oi.orderPrice, oi.count)" +
+    		" from OrderItem oi" +
+        	" join oi.item i" +
+        	" where oi.order.id = : orderId", OrderItemQueryDto.class)
+     	.setParameter("orderId", orderId)
+        .getResultList();
+}
+```
+
+- findOrders() : Order 와 **ToOne** 관계인 ```Member```, ```Delivery``` 엔티티는 join 으로 한번에 조회
+- findOrderItems() : Order와 **ToMany** 관계인 ```OrderItem``` 을 join하면 최적화가 어려우니 각각 조회하도록 별도의 method 에서 조회
+
+
+### 1. 모든 order 를 조회하는 쿼리 발생
+
+```text
+	select
+        order0_.order_id as col_0_0_,
+        member1_.name as col_1_0_,
+        order0_.order_date as col_2_0_,
+        order0_.status as col_3_0_,
+        delivery2_.city as col_4_0_,
+        delivery2_.street as col_4_1_,
+        delivery2_.zipcode as col_4_2_ 
+    from
+        orders order0_ 
+    inner join
+        member member1_ 
+            on order0_.member_id=member1_.member_id 
+    inner join
+        delivery delivery2_ 
+            on order0_.delivery_id=delivery2_.delivery_id
+```
+
+### 2. ToMany 관계인 OrderItem 을 조회하는 쿼리 발생
+
+```text
+	select
+        orderitem0_.order_id as col_0_0_,
+        item1_.name as col_1_0_,
+        orderitem0_.order_price as col_2_0_,
+        orderitem0_.count as col_3_0_ 
+    from
+        order_item orderitem0_ 
+    inner join
+        item item1_ 
+            on orderitem0_.item_id=item1_.item_id 
+    where
+        orderitem0_.order_id=?
+```
+
+### 3. ToMany 관계인 OrderItem 을 조회하는 쿼리 발생
+
+```
+   select
+        orderitem0_.order_id as col_0_0_,
+        item1_.name as col_1_0_,
+        orderitem0_.order_price as col_2_0_,
+        orderitem0_.count as col_3_0_ 
+    from
+        order_item orderitem0_ 
+    inner join
+        item item1_ 
+            on orderitem0_.item_id=item1_.item_id 
+    where
+        orderitem0_.order_id=?
+```
+
+ToOne 관계는 join 해도 row 수가 증가하지 않으므로 ```Member```, ```Delivery``` 는 함께 조회하는 루트 쿼리 1개가 발생한다.
+
+ToMany 관계를 join 하면 row 수가 증가해 최적화가 어렵기 때문에 별도의 method 를 작성했지만, 모든 OrderItem 을 조회하는 **N 번의 쿼리가 발생**되므로 ```N + 1 문제```가 발생한다. 모든 OrderItem 을 조회하기 위해 N 번 쿼리가 발생하는 문제를 최적화하기 위해 **where 절에 in을 추가**한다.
+<br>
+
+
+
+- 해당 커밋 [3f29696](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/3f29696f0723b2603653dfbf9804abca7762fe47)
+
+```where oi.order.id = : orderId``` 에서 ```where oi.order.id in :orderIds``` 으로 변경했다.
+
+### 1. 모든 Order 를 조회하는 쿼리 발생
+
+```text
+ 	select
+        order0_.order_id as col_0_0_,
+        member1_.name as col_1_0_,
+        order0_.order_date as col_2_0_,
+        order0_.status as col_3_0_,
+        delivery2_.city as col_4_0_,
+        delivery2_.street as col_4_1_,
+        delivery2_.zipcode as col_4_2_ 
+    from
+        orders order0_ 
+    inner join
+        member member1_ 
+            on order0_.member_id=member1_.member_id 
+    inner join
+        delivery delivery2_ 
+            on order0_.delivery_id=delivery2_.delivery_id
+```
+
+### 2. ToMany 관계인 OrderItem 를 한번에 조회하는 쿼리
+
+```text
+ 	select
+        orderitem0_.order_id as col_0_0_,
+        item1_.name as col_1_0_,
+        orderitem0_.order_price as col_2_0_,
+        orderitem0_.count as col_3_0_ 
+    from
+        order_item orderitem0_ 
+    inner join
+        item item1_ 
+            on orderitem0_.item_id=item1_.item_id 
+    where
+        orderitem0_.order_id in (
+            ? , ?
+        )
+--------------------------------------------------------       
+ -> where orderitem0_.order_id in (4 , 11);
+```
+
+ToMany 관계인 OrderItem 을 한번에 조회하기 위해 **where 절에 in 을 추가**했더니 총 2개의 쿼리가 발생했다. 즉, ```where in``` 으로도 **N + 1** 문제를 **1 + 1** 로 해결할 수 있다.
