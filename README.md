@@ -6,7 +6,7 @@
 - [양방향 관계 @JsonIgnore 설정](#Bidirectional relationship)
 - [지연 로딩에 대한 Type definition error 발생](#Lazy loading(Type definition error))
 
-# @ManyToOne
+## @ManyToOne
 
 - member 관련 커밋 [daa3890](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/daa3890a4446bb0aab792751319b6e67eeb107dd)
 - order 관련 커밋 [ea0afef](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/ea0afefe6c921bea497faaa50fee8e608b0cede2)
@@ -73,7 +73,7 @@ Spring Data JPA 를 사용하지 않으면 **EntityManager를 직접 작성해�
 - ```@PersistenceUnit``` : EntityManagerFactory 주입
 <br>
 
-# Bidirectional relationship
+## Bidirectional relationship
 
 - 해당 커밋 [c0a7d87](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/c0a7d87e6a99b9b2023d908fd14850230d3e683f)
 
@@ -137,7 +137,7 @@ public class Member {
 Order 와 Member 관계에서 주인이 아닌 Member Entity 에 ```@JsonIgnore``` 를 추가하면 조회 시 해당 필드는 ignore 되어 무한루프를 막는다.
 <br>
 
-# Lazy loading(Type definition error)
+## Lazy loading(Type definition error)
 
 양방향 관계로 인해 발생되는 무한루프를 해결했지만 지연 로딩에 대한 에러가 발생한다.
 
@@ -181,7 +181,7 @@ more...
 즉, Member 객체를 조회하는 시점에는 Member 객체가 아닌 프록시 객체를 가지고 있는데 jackson 라이브러리는 프록시 객체를 json으로 어떻게 생성해야 하는지 모르기 때문에 에러가 발생한다. 지연 로딩을 해결하기 위해 hibernate5Module 을 사용하여 에러를 해결할 수 있다.
 <br>
 
-## hibernate5Module 적용
+### hibernate5Module 적용
 
 - 해당 커밋 [89341e9](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/89341e9fbc6ea08f6a2f8549165a066dead7f116)
 - hibernate5Module 의존성 추가 : https://mvnrepository.com/artifact/com.fasterxml.jackson.datatype/jackson-datatype-hibernate5
@@ -202,6 +202,7 @@ public List<Order> orders(){
 ![png](/_image/apply_hibernate5.png)
 
 ```hibernate5Module``` 을 적용하면 위에서 발생했던 bytebuddy.ByteBuddyInterceptor 관련 에러가 발생하지 않고 **지연 로딩으로 설정된 필드는 null 로 출력**된다.
+<br>
 
 ### 강제 초기화
 
