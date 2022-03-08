@@ -3,14 +3,14 @@
 ![png](/_image/order_system_erd.png)
 
 - [Order 와 Member 관계 : @ManyToOne](#ManyToOne)
-- [양방향 관계 @JsonIgnore 설정](#bidirectional-relationship----)
+- [양방향 관계 @JsonIgnore 설정](#Bidirectional-relationship)
 - [지연 로딩에 대한 Type definition error 발생](#Type-definition-error)
 - [JPA N + 1 쿼리 문제](#JPA-N-plus-1)
-- [컬렉션 조회](#collection-)
-- [fetch join](#fetch-join-)
+- [컬렉션 조회](#Collection)
+- [fetch join](#Fetch-join)
 - [paging 불가능](#paging)
-- [batch fetch size 설정](#hibernatedefault_batch_fetch_size-)
-- [where in 절로 N + 1 쿼리 해결](#where-in--n--1--)
+- [batch fetch size 설정](#hibernatedefault_batch_fetch_size)
+- [where in 절로 N + 1 쿼리 해결](#where-in)
 
 ## ManyToOne
 
@@ -79,7 +79,7 @@ Spring Data JPA 를 사용하지 않으면 **EntityManager를 직접 작성해�
 - ```@PersistenceUnit``` : EntityManagerFactory 주입
 <br>
 
-## Bidirectional relationship 에서 발생되는 무한 루트
+## Bidirectional relationship
 
 - 해당 커밋 [c0a7d87](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/c0a7d87e6a99b9b2023d908fd14850230d3e683f)
 
@@ -412,7 +412,7 @@ order Id 가 4 인 주문에서 getName() 호출하며 MEMBER_ID 가 1인 엔티
 이런식으로 쿼리를 줄일 수 있지만 최악의 경우 대비해야 되기 때문에 최악의 경우에 중점을 두고 작성해야하며, 1차 캐시를 이용해 쿼리를 줄인다는 것은 그닥 많은 효과가 있을 것 같지 않다.
 <br>
 
-## Collection 조회
+## Collection
 
 ```@OneToMany``` 관계를 조회하는 것을 컬렉션 조회라고 한다. 1개의 주문에 여러 주문 상품이 있는 경우가 일대다 관계인데 fetch join 할 경우 엄청나게 많은 데이터를 읽어온다.<br>
 
@@ -530,7 +530,7 @@ repository 의 재사용성을 높이기 위해 DTO 로 변환하지 말고, 순
 뿐만 아니라 성능은 조회가 아닌 **JOIN 할 때 결정**되는데 두 방식은 같은 JOIN 방식이므로 성능 차이가 크게 나지 않는다.
 <br>
 
-## Fetch join 적용
+## Fetch join
 
 - 해당 커밋 [75be719](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/75be71982518f1903a9d865ad3985ca10cccba46)
 
@@ -646,7 +646,7 @@ distinct를 추가하면 JPA 에서는 id 가 같은 경우 중복을 제거하�
 collection fetch join 은 많은 데이터가 처리되므로 2개 이상 join 시 데이터가 부정합하게 조회될 수 있어 1개만 사용하는게 좋다.
 <br>
 
-## paging
+## Paging
 
 collection fetch join 사용 시 **paging 이 불가능**한 문제점도 발생한다.
 
@@ -735,7 +735,7 @@ applying in memory!
  ```
 fetch 한 모든 데이터를 읽어와 메모리에서 페이징하니 위험하다는 경고이다. 결론은 collection fetch join 사용 시 paging 이 불가능하다.<br>
 
-## hibernate.default_batch_fetch_size 설정
+## hibernate.default_batch_fetch_size
 
 - 해당 커밋 [546edc6](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/546edc62664ba4adbbfb30f7e47230d9a22b340b)
 
@@ -781,7 +781,7 @@ xToOne(OneToOne, ManyToOne) 관계는 fetch join 해도 row 수가 증가하지 
 3. OrderItem 에서 ManyToOne 관계인 ```Item(one)``` 에 대한 쿼리 발생
 
 
-### 1. 모든 주문 orders를 가져오는 쿼리
+### 1. 모든 주문 orders 를 가져오는 쿼리
 
 ```text
   select
@@ -873,7 +873,7 @@ ToMany 관계에 batch size 설정 시 장점을 정리하면 다음과 같다.
 결론은 ToOne 관계는 fetch join 해도 paging 에 영향을 주지 않으니 fetch join 으로 쿼리 호출 수를 줄이고, ToMany 관계는 batch size 설정으로 최적화한다.
 <br>
 
-## where in 로 N + 1 쿼리 해결
+## where in
 
 - 해당 커밋 [4aedce8](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/4aedce8cbffc72a98584b03014ec44e2b7740d0f)
 
