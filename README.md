@@ -1,11 +1,12 @@
-주문 시스템의 구조에 관한 설명과 주요 설정에 대해 설명한다.<br>
-
-- ERD 코드 : https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/blob/master/ERD
+> 주문 시스템을 구현하며 JPA N + 1 쿼리 문제를 해결한다.
 
 ![png](/_image/order_system_erd.png)
 
+- [Order 와 Member 관계 : @ManyToOne](#@ManyToOne)
+- [양방향 관계 @JsonIgnore 설정](#Bidirectional relationship)
+- [지연 로딩에 대한 Type definition error 발생](#Lazy loading(Type definition error))
 
-## @ManyToOne
+# @ManyToOne
 
 - member 관련 커밋 [daa3890](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/daa3890a4446bb0aab792751319b6e67eeb107dd)
 - order 관련 커밋 [ea0afef](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/ea0afefe6c921bea497faaa50fee8e608b0cede2)
@@ -70,18 +71,9 @@ Spring Data JPA 를 사용하지 않으면 **EntityManager를 직접 작성해�
 
 - ```@PersistenceContext``` : EntityManger 주입
 - ```@PersistenceUnit``` : EntityManagerFactory 주입
-  <br>
+<br>
 
-
-# API 개발
-
-사용자가 보는 화면 구성에서 요구하는 데이터가 변경될 때마다 Service layer 를 계속해서 변경하는 것은 좋지 않다. Service layer에서 제공하는 데이터는 화면 구성을 채우기 위한 데이터의 목적만 가지고 있는게 아니다. 다른 서비스끼리 호출하는 경우도 많기 때문에 DTO 를 기준으로 서비스 계층을 만들어간다면 효율성도 떨어지고 유지보수도 어려워진다.
-
-또한, 서비스 계층에서 엔티티 자체를 UI에 넘기는 것은 보안상으로 바람직하지 못하다. 만약 엔티티가 getter(), setter()를 가지고 있다면 비지니스 계층이 아닌 곳에서 수정이 이루어질 수 있기 때문이다. 그래서 비지니스 계층이 아닌 다른 계층에서 엔티티가 수정되는 것을 막기 위해 필요한 데이터만 DTO 로 넘겨주면 좋다고 생각한다.
-
-
-
-## 양방향 관계에서 무한루프 발생 (xToOne)
+# Bidirectional relationship
 
 - 해당 커밋 [c0a7d87](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/c0a7d87e6a99b9b2023d908fd14850230d3e683f)
 
@@ -145,7 +137,7 @@ public class Member {
 Order 와 Member 관계에서 주인이 아닌 Member Entity 에 ```@JsonIgnore``` 를 추가하면 조회 시 해당 필드는 ignore 되어 무한루프를 막는다.
 <br>
 
-## 지연 로딩에 대한 Type definition error 발생
+# Lazy loading(Type definition error)
 
 양방향 관계로 인해 발생되는 무한루프를 해결했지만 지연 로딩에 대한 에러가 발생한다.
 
