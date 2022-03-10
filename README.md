@@ -58,7 +58,6 @@ public List<Member> findAll(){
 ```
 모든 Member entity 를 List 에 담아 반환한다.
 
-
 ```java
 public List<Member> findByName(String name){
     return em.createQuery(
@@ -66,8 +65,10 @@ public List<Member> findByName(String name){
             .setParameter("name", name)
             .getResultList();
     }
+}
 ```
 파라미터로 전달된 name 과 Member entity 의 name 필드가 동일한 entity 를 List 에 담아 반환한다.
+<br><br>
 
 ```java
 @PersistenceContext
@@ -94,7 +95,7 @@ public List<Order> orders(){
         order.getDelivery().getAddress();
     }
     return all;
-  }
+}
 ```
 order repository 에 있는 모든 주문을 가져오는 method 를 작성한다. 해당 API 에 대해 GET 요청하면 다음과 같은 결과를 얻는다.
 
@@ -167,16 +168,13 @@ public class Order {
 ```text
 Servlet.service() for servlet [dispatcherServlet] in context 
 with path [] threw exception [Request processing failed; 
-nested exception is org.springframework
-.http.converter.HttpMessageConversionException: 
+nested exception is org.springframework.http.converter.HttpMessageConversionException: 
 
 Type definition error: [simple type, class org
 .hibernate.proxy.pojo.bytebuddy.ByteBuddyInterceptor]; 
-nested exception is com.fasterxml
-.jackson.databind.exc.InvalidDefinitionException: 
+nested exception is com.fasterxml.jackson.databind.exc.InvalidDefinitionException: 
 
-No serializer found for class org
-.hibernate.proxy.pojo.bytebuddy.ByteBuddyInterceptor
+No serializer found for class org.hibernate.proxy.pojo.bytebuddy.ByteBuddyInterceptor
 more...
 ```
 
@@ -207,12 +205,12 @@ public List<Order> orders(){
 ```
 ![png](/_image/apply_hibernate5.png)
 
-```hibernate5Module``` 을 적용하면 위에서 발생했던 bytebuddy.ByteBuddyInterceptor 관련 에러가 발생하지 않고 **지연 로딩으로 설정된 필드는 null 로 출력**된다.
+```hibernate5Module``` 을 적용하면 위에서 발생했던 ```bytebuddy.ByteBuddyInterceptor``` 관련 에러가 발생하지 않고 **지연 로딩으로 설정된 필드는 null 로 출력**된다.
 <br>
 
 ### 강제 초기화
 
-주문에서 주문한 멤버를 불러오는 ```order.getMember()``` 호출 시 실제 DB에 접근하지 않고 null을 반환한다. 하지만 주문한 멤버의 이름까지 요구하는 ```order.getMember().getName()``` 호출 시 **LAZY 설정이 강제 초기화 되어 DB에 접근**한다.
+주문에서 주문한 멤버를 불러오는 ```order.getMember()``` 호출 시 실제 DB에 접근하지 않고 **null** 을 반환한다. 하지만 주문한 멤버의 이름까지 요구하는 ```order.getMember().getName()``` 호출 시 **LAZY 설정이 강제 초기화 되어 DB에 접근**한다.
 
 ```java
 @GetMapping("/api/orders")
@@ -228,7 +226,7 @@ public List<Order> orders(){
 
 ![png](/_image/apply_hibernate5_lazy.png)
 
-LAZY 설정한 필드를 강제 초기화하면 null값이 아닌 해당 객체까지 잘 출력되는 것을 알 수 있다.
+LAZY 설정한 필드를 강제 초기화하면 **null** 값이 아닌 해당 객체까지 잘 출력되는 것을 알 수 있다.
 
 하지만 **Entity 자체를 파라미터로 받거나 API 응답으로 외부에 노출시키는 것은 좋은 방법이 아니기 때문에** DTO를 적용한다.
 
@@ -264,10 +262,10 @@ static class SimpleOrderDto{
 
 모든 주문 데이터를 가져오기 위해 ```http://localhost:8080/api/orders``` 를 요청 시 발생되는 쿼리는 다음과 같다.
 
-```text
-// 1. orderRepository에서 모든 주문 orders를 가져오기 위한 쿼리 발생
+### 1. orderRepository에서 모든 주문 orders를 가져오기 위한 쿼리 발생
 
- select
+```text
+select
         order0_.order_id as order_id1_6_,
         order0_.delivery_id as delivery4_6_,
         order0_.member_id as member_i5_6_,
@@ -275,10 +273,11 @@ static class SimpleOrderDto{
         order0_.status as status3_6_ 
     from
         orders order0_
-------------------------------------------------
-// 2. order_id 4 를 주문한 member_id 가 1 인 멤버의
-        getName()을 수행하기 위한 쿼리 발생
-        
+```
+
+### 2. order_id 4 를 주문한 member_id 가 1 인 멤버의 getName() 을 수행하기 위한 쿼리 발생
+ 
+```text       
  select
         member0_.member_id as member_i1_4_0_,
         member0_.city as city2_4_0_,
@@ -290,9 +289,11 @@ static class SimpleOrderDto{
     where
         member0_.member_id=?
         orders order0_
-------------------------------------------------
-// 3. order_id 4 주문의 getAddress()를 수행하기 위한 쿼리 발생
+```
 
+### 3. order_id 4 주문의 getAddress() 를 수행하기 위한 쿼리 발생
+
+```text
  select
         delivery0_.delivery_id as delivery1_2_0_,
         delivery0_.city as city2_2_0_,
@@ -304,10 +305,10 @@ static class SimpleOrderDto{
     where
         delivery0_.delivery_id=?
         orders order0_
-------------------------------------------------
-// 4. order_id 11 를 주문한 member_id 가 8 인 멤버의
-        getName()을 수행하기 위한 쿼리 발생
-        
+```
+
+### 4. order_id 11 를 주문한 member_id 가 8 인 멤버의 getName() 을 수행하기 위한 쿼리 발생
+```text
  select
         member0_.member_id as member_i1_4_0_,
         member0_.city as city2_4_0_,
@@ -319,9 +320,11 @@ static class SimpleOrderDto{
     where
         member0_.member_id=?
         orders order0_
-------------------------------------------------
-// 5. order_id 11 주문의 getAddress()을 수행하기 위한 쿼리 발생
+```
 
+### 5. order_id 11 주문의 getAddress() 을 수행하기 위한 쿼리 발생
+
+```text
  select
         delivery0_.delivery_id as delivery1_2_0_,
         delivery0_.city as city2_2_0_,
@@ -333,7 +336,6 @@ static class SimpleOrderDto{
     where
         delivery0_.delivery_id=?
 ```
-
 총 5개의 쿼리가 발생한다.
 
 1. OrderRepository 에서 **모든 주문 orders** 를 가져오기 위한 쿼리 발생
@@ -350,9 +352,24 @@ static class SimpleOrderDto{
 
 ![png](/_image/order_table_modify_member_id.png)
 
+### 1. orderRepository 에서 모든 주문 orders 를 가져오기 위한 쿼리 발생
+
 ```text
-// 1. orderRepository에서 모든 주문 orders를 가져오기 위한 쿼리 발생
+select
+        delivery0_.delivery_id as delivery1_2_0_,
+        delivery0_.city as city2_2_0_,
+        delivery0_.street as street3_2_0_,
+        delivery0_.zipcode as zipcode4_2_0_,
+        delivery0_.status as status5_2_0_ 
+    from
+        delivery delivery0_ 
+    where
+        delivery0_.delivery_id=?
+```
 
+### 2. order_id 4 주문자인 member_id 가 1 인 멤버의 getName() 을 수행하기 위한 쿼리 발생
+ 
+```text       
  select
         delivery0_.delivery_id as delivery1_2_0_,
         delivery0_.city as city2_2_0_,
@@ -363,10 +380,11 @@ static class SimpleOrderDto{
         delivery delivery0_ 
     where
         delivery0_.delivery_id=?
-------------------------------------------------
-// 2. order_id 4 주문자인 member_id 가 1 인 멤버의
-        getName()을 수행하기 위한 쿼리 발생
-        
+```
+
+### 3. order_id 4 주문의 getAddress() 을 수행하기 위한 쿼리 발생
+
+```text
  select
         delivery0_.delivery_id as delivery1_2_0_,
         delivery0_.city as city2_2_0_,
@@ -377,22 +395,11 @@ static class SimpleOrderDto{
         delivery delivery0_ 
     where
         delivery0_.delivery_id=?
-------------------------------------------------
-// 3. order_id 4 주문의 getAddress()을 수행하기 위한 쿼리 발생
+```
 
- select
-        delivery0_.delivery_id as delivery1_2_0_,
-        delivery0_.city as city2_2_0_,
-        delivery0_.street as street3_2_0_,
-        delivery0_.zipcode as zipcode4_2_0_,
-        delivery0_.status as status5_2_0_ 
-    from
-        delivery delivery0_ 
-    where
-        delivery0_.delivery_id=?
-------------------------------------------------
-// 4. order_id 11 주문의 getAddress()을 수행하기 위한 쿼리 발생
+### 4. order_id 11 주문의 getAddress() 을 수행하기 위한 쿼리 발생
 
+```text
  select
         delivery0_.delivery_id as delivery1_2_0_,
         delivery0_.city as city2_2_0_,
@@ -421,8 +428,8 @@ order Id 가 4 인 주문에서 getName() 호출하며 MEMBER_ID 가 1인 엔티
 ```java
 
 @GetMapping("/api/orders")
-public List<Order> order(){     
-	List<Order> orders = orderRepository.findAll();
+public List<Order> order() {
+    List<Order> orders = orderRepository.findAll();
     for(Order order : orders){
     	order.getMember().getName();
         order.getDelivery().getAddress();
@@ -430,7 +437,7 @@ public List<Order> order(){
         List<OrderItem> orderItems = order.getOrderItems();
         orderItems.stream().forEach(o -> o.getItem().getName());
     }
-	return orders;
+    return orders;
 }
 ```
 ![png](/_image/collection_lookup.png)
@@ -453,7 +460,7 @@ public List<Order> order(){
 ```java
 @GetMapping("/api/orders")
 public List<OrderDto> order() {
-	List<Order> orders = orderRepository.findAll();
+    List<Order> orders = orderRepository.findAll();
     List<OrderDto> result = orders.stream()
                         .map(o -> new OrderDto(o))
                         .collect(Collectors.toList());
