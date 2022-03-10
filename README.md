@@ -7,6 +7,7 @@
 - [지연 로딩에 대한 Type definition error 발생](#Type-definition-error)
 - [JPA N + 1 쿼리 문제](#JPA-N-plus-1)
 - [컬렉션 조회](#Collection)
+- [DTO 로 반환하는 API](#api-that-returns-dto)
 - [fetch join](#Fetch-join)
 - [paging 불가능](#paging)
 - [batch fetch size 설정](#hibernatedefault_batch_fetch_size)
@@ -453,7 +454,9 @@ public List<Order> order() {
 1 개의 주문에서 3 개의 쿼리가 발생하고, 주문한 아이템에 대한 각각의 데이터를 가져오기 위해 **주문한 아이템 수 n 개의 쿼리가 추가로 발생**한다. 이렇게 OneToMany 관계에서는 엄청나게 많은 쿼리가 발생한다.
 <br>
 
-일단 entity 자체를 반환하는 것을 막고 원하는 데이터만 출력하도록 DTO를 적용한다.
+## API that returns DTO
+
+일단 entity 자체를 반환하는 것을 막고 원하는 데이터만 출력하도록 DTO 를 적용한다.
 
 - 해당 커밋 [f74cbc8](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/f74cbc8e437257d8224fc10cd681ee11d368a7c4)
 
@@ -470,14 +473,12 @@ public List<OrderDto> order() {
 
 ![png](/_image/collection_lookup_apply_dto.png)
 
-DTO를 적용으로 원하는 데이터만 출력되었으며 발생되는 쿼리는 위와 동일하게 많다.
+DTO 를 적용으로 원하는 데이터만 출력되지만, 발생되는 쿼리는 **위와 동일하다.**
 <br>
-
-## DTO 로 반환하는 API
 
 - 해당 커밋 [ddbb74e](https://github.com/evelyn82ny/JPA-N-plus-1-query-problem/commit/ddbb74ecf779a474f31d054759439a22f662973a)
 
-불필요한 데이터까지 가져오는 것보다 원하는 데이터만 가져오는 최적화를 시도한다.
+위와 같이 모든 데이터를 가져온다음 DTO 로 변환하는 것이 아니고 SELECT 절에서 원하는 데이터만 가져오는 방식으로 적용해본다.
 
 ```java
 @Data
@@ -490,7 +491,7 @@ public class OrderSimpleQueryDto {
     // 생성자
 }
 ```
-5 개의 필드만 가져오는 DTO 를 생성했다.
+5 개의 필드만 가져오는 OrderSimpleQueryDto 를 생성했다.
 
 ```java
 public List<OrderSimpleQueryDto> findOrderDtos() {
