@@ -1,4 +1,6 @@
-> 주문 시스템을 구현하며 JPA N + 1 쿼리 문제를 해결한다.
+# JPA N + 1 query 문제 해결
+
+ 주문 시스템을 구현하며 JPA N + 1 쿼리 문제를 해결한다.
 
 ![png](/_image/order_system_erd.png)
 
